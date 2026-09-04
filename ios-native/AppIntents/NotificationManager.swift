@@ -36,7 +36,13 @@ public class NativeNotificationManager {
         case "daily":
             trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         case "weekly":
-            dateComponents.weekday = Calendar.current.component(.weekday, from: Date())
+            var targetComponents = DateComponents()
+            targetComponents.year = year
+            targetComponents.month = month
+            targetComponents.day = day
+            if let targetDate = Calendar.current.date(from: targetComponents) {
+                dateComponents.weekday = Calendar.current.component(.weekday, from: targetDate)
+            }
             trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
         default:
             dateComponents.year = year

@@ -41,6 +41,7 @@ public struct CreateReminderIntent: AppIntent {
     
     public func perform() async throws -> some ReturnsValue<String> & ProvidesDialog {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "yyyy-MM-dd"
         let dateString = formatter.string(from: date)
         
