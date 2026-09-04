@@ -5,7 +5,7 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "1",
+    "scheme": "agentreminder",
     "userInterfaceStyle": "automatic",
     "ios": {
       "supportsTablet": true,
@@ -26,6 +26,7 @@
       "favicon": "./assets/images/favicon.png"
     },
     "plugins": [
+      "./plugins/withAppIntents.js",
       "expo-router",
       [
         "expo-splash-screen",
