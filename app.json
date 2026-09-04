@@ -8,6 +8,8 @@
     "scheme": "1",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.anonymous.myapp",
       "icon": "./assets/expo.icon"
     },
     "android": {
