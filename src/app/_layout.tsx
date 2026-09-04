@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useCallback } from 'react';
 import { DarkTheme, DefaultTheme, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import * as Linking from 'expo-linking';
@@ -6,36 +6,42 @@ import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
-import { parseUrlScheme, executeUrlAction } from '@/services/urlScheme';
-import { defaultStorage } from '@/services/storage';
-import { defaultNotificationEngine } from '@/services/notifications';
+import { handleIncomingUrl, shouldProcessIncomingUrl } from '@/services/urlScheme';
 
 SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const lastProcessedUrlRef = useRef<{ url: string; timestamp: number } | null>(null);
+
+  // 防重处理与 URL 执行函数
+  const processUrl = useCallback((url: string) => {
+    if (!url) return;
+    const now = Date.now();
+    if (!shouldProcessIncomingUrl(lastProcessedUrlRef.current, url, now, 1000)) {
+      return;
+    }
+    lastProcessedUrlRef.current = { url, timestamp: now };
+    handleIncomingUrl(url).catch((err) => {
+      console.error('Failed to execute URL action:', err);
+    });
+  }, []);
 
   useEffect(() => {
-    // 监听外部 Agent 通过 URL Scheme 唤起
+    // 1. 监听外部 Agent 运行时 URL Scheme 唤起
     const handleUrl = (event: { url: string }) => {
       if (event?.url) {
-        const action = parseUrlScheme(event.url);
-        executeUrlAction(action, defaultStorage, defaultNotificationEngine).catch((err) => {
-          console.error('Failed to execute URL action:', err);
-        });
+        processUrl(event.url);
       }
     };
 
     const subscription = Linking.addEventListener('url', handleUrl);
 
-    // 处理冷启动时的初始 URL
+    // 2. 处理冷启动初始 URL（通过防重机制避免与 addEventListener 重复处理）
     Linking.getInitialURL()
       .then((url) => {
         if (url) {
-          const action = parseUrlScheme(url);
-          executeUrlAction(action, defaultStorage, defaultNotificationEngine).catch((err) => {
-            console.error('Failed to execute initial URL action:', err);
-          });
+          processUrl(url);
         }
       })
       .catch((err) => {
@@ -45,7 +51,7 @@ export default function RootLayout() {
     return () => {
       subscription.remove();
     };
-  }, []);
+  }, [processUrl]);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

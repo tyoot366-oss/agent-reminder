@@ -7,12 +7,13 @@ import {
   TouchableOpacity,
   RefreshControl,
   AppState,
+  Alert,
   type AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ReminderCard } from '@/components/ReminderCard';
-import { FilterBar, type FilterType } from '@/components/FilterBar';
+import { FilterBar } from '@/components/FilterBar';
 import { AddReminderModal } from '@/components/AddReminderModal';
 import { defaultStorage } from '@/services/storage';
 import { defaultNotificationEngine } from '@/services/notifications';
@@ -21,7 +22,7 @@ import {
   filterReminders,
   computeFilterCounts,
 } from '@/services/defaults';
-import type { ReminderItem, CreateReminderInput } from '@/types/reminder';
+import type { ReminderItem, CreateReminderInput, FilterType } from '@/types/reminder';
 
 function getTodayDisplayString(): string {
   const now = new Date();
@@ -85,14 +86,19 @@ export default function RemindersScreen() {
   // 4. 切换状态 (完成 / 待办) 并同步本地通知引擎
   const handleToggle = useCallback(
     async (id: string) => {
-      const updated = await defaultStorage.toggleStatus(id);
-      if (updated) {
-        if (updated.isCompleted) {
-          await defaultNotificationEngine.cancel(id);
-        } else {
-          await defaultNotificationEngine.schedule(updated);
+      try {
+        const updated = await defaultStorage.toggleStatus(id);
+        if (updated) {
+          if (updated.isCompleted) {
+            await defaultNotificationEngine.cancel(id);
+          } else {
+            await defaultNotificationEngine.schedule(updated);
+          }
+          await loadReminders();
         }
-        await loadReminders();
+      } catch (err: any) {
+        console.error('Failed to toggle reminder status:', err);
+        Alert.alert('操作失败', err?.message || '更新提醒状态失败，请重试');
       }
     },
     [loadReminders]
@@ -101,10 +107,15 @@ export default function RemindersScreen() {
   // 5. 删除提醒并注销通知
   const handleDelete = useCallback(
     async (id: string) => {
-      const ok = await defaultStorage.delete(id);
-      if (ok) {
-        await defaultNotificationEngine.cancel(id);
-        await loadReminders();
+      try {
+        const ok = await defaultStorage.delete(id);
+        if (ok) {
+          await defaultNotificationEngine.cancel(id);
+          await loadReminders();
+        }
+      } catch (err: any) {
+        console.error('Failed to delete reminder:', err);
+        Alert.alert('操作失败', err?.message || '删除提醒失败，请重试');
       }
     },
     [loadReminders]
@@ -113,10 +124,15 @@ export default function RemindersScreen() {
   // 6. 新增提醒
   const handleAdd = useCallback(
     async (input: CreateReminderInput) => {
-      const item = applyReminderDefaults(input);
-      await defaultStorage.save(item);
-      await defaultNotificationEngine.schedule(item);
-      await loadReminders();
+      try {
+        const item = applyReminderDefaults(input);
+        await defaultStorage.save(item);
+        await defaultNotificationEngine.schedule(item);
+        await loadReminders();
+      } catch (err: any) {
+        console.error('Failed to add reminder:', err);
+        Alert.alert('操作失败', err?.message || '创建提醒失败，请重试');
+      }
     },
     [loadReminders]
   );

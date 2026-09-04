@@ -161,3 +161,21 @@ export async function handleIncomingUrl(
   return executeUrlAction(action, storage, notifications);
 }
 
+export function shouldProcessIncomingUrl(
+  lastProcessed: { url: string; timestamp: number } | null,
+  newUrl: string,
+  now: number = Date.now(),
+  windowMs: number = 1000
+): boolean {
+  if (!newUrl) return false;
+  if (
+    lastProcessed &&
+    lastProcessed.url === newUrl &&
+    now - lastProcessed.timestamp < windowMs
+  ) {
+    return false;
+  }
+  return true;
+}
+
+

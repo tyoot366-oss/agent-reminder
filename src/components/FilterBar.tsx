@@ -1,7 +1,8 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
+import type { FilterType } from '../types/reminder.ts';
 
-export type FilterType = 'all' | 'pending' | 'completed' | 'repeating';
+export type { FilterType };
 
 export interface FilterBarProps {
   currentFilter: FilterType;

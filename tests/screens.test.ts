@@ -11,6 +11,7 @@ import {
   parseUrlScheme,
   executeUrlAction,
   handleIncomingUrl,
+  shouldProcessIncomingUrl,
 } from '../src/services/urlScheme.ts';
 import type { ReminderItem } from '../src/types/reminder.ts';
 
@@ -267,3 +268,32 @@ test('前台数据同步与 Storage 监听: 外部修改时组件订阅与 AppSt
   // 取消订阅
   unsubscribe();
 });
+
+test('URL Scheme 防重机制: 相同 URL 在 1000ms 内重复到达正确过滤', () => {
+  const url = 'agentreminder://create?title=%E6%B5%8B%E8%AF%95';
+  const t0 = 10000;
+
+  // 首次接收：应处理
+  const should1 = shouldProcessIncomingUrl(null, url, t0);
+  assert.strictEqual(should1, true);
+
+  const lastRecord = { url, timestamp: t0 };
+
+  // 100ms 内重复到达（例如 getInitialURL 与 addEventListener 双重触发）：应防重拦截
+  const should2 = shouldProcessIncomingUrl(lastRecord, url, t0 + 100);
+  assert.strictEqual(should2, false);
+
+  // 999ms 重复到达：仍被拦截
+  const should3 = shouldProcessIncomingUrl(lastRecord, url, t0 + 999);
+  assert.strictEqual(should3, false);
+
+  // 超过 1000ms 到达：应允许处理
+  const should4 = shouldProcessIncomingUrl(lastRecord, url, t0 + 1001);
+  assert.strictEqual(should4, true);
+
+  // 不同 URL：即使在 100ms 内也应允许处理
+  const diffUrl = 'agentreminder://create?title=%E5%8F%A6%E4%B8%80%E4%B8%AA';
+  const should5 = shouldProcessIncomingUrl(lastRecord, diffUrl, t0 + 100);
+  assert.strictEqual(should5, true);
+});
+
