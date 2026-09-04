@@ -40,3 +40,52 @@ test('ReminderStorage: 保存、查询、切换完成状态与删除流程', asy
   const afterDelete = await storage.getAll();
   assert.strictEqual(afterDelete.length, 0);
 });
+
+test('FileSystemBackend: 模拟 Expo SDK 57 File and Paths API 读写与删除', async () => {
+  const fileStore = new Map<string, string>();
+
+  class MockFile {
+    private uri: string;
+    constructor(container: any, name: string) {
+      this.uri = `${container.uri}/${name}`;
+    }
+    get exists(): boolean {
+      return fileStore.has(this.uri);
+    }
+    async text(): Promise<string> {
+      return fileStore.get(this.uri) || '';
+    }
+    write(content: string): void {
+      fileStore.set(this.uri, content);
+    }
+    delete(): void {
+      fileStore.delete(this.uri);
+    }
+  }
+
+  const mockPaths = {
+    document: { uri: 'file:///data/document' },
+    appleSharedContainers: {
+      'group.com.anonymous.myapp': { uri: 'file:///data/group.com.anonymous.myapp' },
+    },
+  };
+
+  const mockFileSystem = {
+    Paths: mockPaths,
+    File: MockFile,
+  };
+
+  const { FileSystemBackend } = await import('../src/services/storage.ts');
+  const backend = new FileSystemBackend(mockFileSystem);
+
+  assert.strictEqual(await backend.getItem('key'), null);
+
+  await backend.setItem('key', JSON.stringify([{ id: '1', title: '测试' }]));
+  const content = await backend.getItem('key');
+  assert.ok(content);
+  assert.strictEqual(JSON.parse(content!)[0].title, '测试');
+
+  await backend.removeItem('key');
+  assert.strictEqual(await backend.getItem('key'), null);
+});
+

@@ -36,51 +36,84 @@ class LocalMemoryBackend implements StorageBackend {
 }
 
 class FileSystemBackend implements StorageBackend {
-  private getFilePath(): string {
-    // Check if shared App Group container exists
-    if ((FileSystem as any).Paths?.appleSharedContainers) {
-      const container = (FileSystem as any).Paths.appleSharedContainers['group.com.anonymous.myapp'];
-      if (container) {
-        return container.uri + 'reminders.json';
+  private customFs: any;
+
+  constructor(customFs?: any) {
+    this.customFs = customFs;
+  }
+
+  private getFs(): any {
+    return this.customFs || FileSystem;
+  }
+
+  private getTargetFile(): any {
+    const fs = this.getFs();
+    if (!fs) return null;
+    const { Paths, File } = fs;
+    if (!File || !Paths) return null;
+
+    try {
+      let container = Paths.appleSharedContainers?.['group.com.anonymous.myapp'];
+      if (!container) {
+        container = Paths.document;
+      }
+      return new File(container, 'reminders.json');
+    } catch {
+      try {
+        return new File(Paths.document, 'reminders.json');
+      } catch {
+        return null;
       }
     }
-    // Fallback to document directory
-    return `${(FileSystem as any).documentDirectory}reminders.json`;
   }
 
   async getItem(key: string): Promise<string | null> {
-    if (!FileSystem) return null;
+    const fs = this.getFs();
+    if (!fs) return null;
     try {
-      const path = this.getFilePath();
-      const info = await FileSystem.getInfoAsync(path);
-      if (info.exists) {
-        return await FileSystem.readAsStringAsync(path);
+      const file = this.getTargetFile();
+      if (file && file.exists) {
+        return await file.text();
       }
       return null;
-    } catch {
+    } catch (err) {
+      console.warn('Failed to read from FileSystem:', err);
       return null;
     }
   }
 
   async setItem(key: string, value: string): Promise<void> {
-    if (!FileSystem) return;
+    const fs = this.getFs();
+    if (!fs) return;
     try {
-      const path = this.getFilePath();
-      await FileSystem.writeAsStringAsync(path, value);
-    } catch {}
+      const file = this.getTargetFile();
+      if (!file) return;
+
+      if (!file.exists) {
+        try {
+          file.create();
+        } catch {}
+      }
+      file.write(value);
+    } catch (err) {
+      console.warn('Failed to write to FileSystem:', err);
+    }
   }
 
   async removeItem(key: string): Promise<void> {
-    if (!FileSystem) return;
+    const fs = this.getFs();
+    if (!fs) return;
     try {
-      const path = this.getFilePath();
-      const info = await FileSystem.getInfoAsync(path);
-      if (info.exists) {
-        await FileSystem.deleteAsync(path);
+      const file = this.getTargetFile();
+      if (file && file.exists) {
+        file.delete();
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Failed to remove from FileSystem:', err);
+    }
   }
 }
+export { FileSystemBackend };
 
 export class ReminderStorage {
   private backend: StorageBackend;
