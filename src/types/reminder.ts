@@ -1,4 +1,5 @@
 export type RepeatRule = 'none' | 'half_hourly' | 'hourly' | 'daily' | 'weekly';
+export type FilterType = 'all' | 'pending' | 'completed' | 'repeating';
 
 export interface ReminderItem {
   id: string;

@@ -1,4 +1,4 @@
-import type { ReminderItem, CreateReminderInput, RepeatRule } from '../types/reminder.ts';
+import type { ReminderItem, CreateReminderInput, RepeatRule, FilterType } from '../types/reminder.ts';
 
 export const DEFAULT_TIME = '08:00';
 export const DEFAULT_REPEAT: RepeatRule = 'hourly';
@@ -46,3 +46,32 @@ export function applyReminderDefaults(input: CreateReminderInput): ReminderItem 
     notificationId: id,
   };
 }
+
+export function filterReminders(items: ReminderItem[], filter: FilterType): ReminderItem[] {
+  switch (filter) {
+    case 'pending':
+      return items.filter((item) => !item.isCompleted);
+    case 'completed':
+      return items.filter((item) => item.isCompleted);
+    case 'repeating':
+      return items.filter((item) => item.repeat !== 'none');
+    case 'all':
+    default:
+      return items;
+  }
+}
+
+export function computeFilterCounts(items: ReminderItem[]): {
+  all: number;
+  pending: number;
+  completed: number;
+  repeating: number;
+} {
+  return {
+    all: items.length,
+    pending: items.filter((item) => !item.isCompleted).length,
+    completed: items.filter((item) => item.isCompleted).length,
+    repeating: items.filter((item) => item.repeat !== 'none').length,
+  };
+}
+

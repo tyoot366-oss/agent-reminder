@@ -32,9 +32,25 @@ class LocalMemoryBackend implements StorageBackend {
 
 export class ReminderStorage {
   private backend: StorageBackend;
+  private listeners = new Set<() => void>();
 
   constructor(backend?: StorageBackend) {
     this.backend = backend || new LocalMemoryBackend();
+  }
+
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  private notify(): void {
+    this.listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch {}
+    });
   }
 
   async getAll(): Promise<ReminderItem[]> {
@@ -66,6 +82,7 @@ export class ReminderStorage {
     }
 
     await this.backend.setItem(STORAGE_KEY, JSON.stringify(list));
+    this.notify();
     return updatedItem;
   }
 
@@ -76,6 +93,7 @@ export class ReminderStorage {
       return false;
     }
     await this.backend.setItem(STORAGE_KEY, JSON.stringify(filtered));
+    this.notify();
     return true;
   }
 

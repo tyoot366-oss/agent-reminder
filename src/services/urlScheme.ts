@@ -1,6 +1,6 @@
 import type { CreateReminderInput, RepeatRule } from '../types/reminder.ts';
-import type { ReminderStorage } from './storage.ts';
-import type { NotificationEngine } from './notifications.ts';
+import { ReminderStorage, defaultStorage } from './storage.ts';
+import { NotificationEngine, defaultNotificationEngine } from './notifications.ts';
 import { applyReminderDefaults, validateReminderDate } from './defaults.ts';
 
 export type ParsedUrlAction =
@@ -148,3 +148,16 @@ export async function executeUrlAction(
       return { success: false, message: `无法识别的指令：${action.error}` };
   }
 }
+
+export async function handleIncomingUrl(
+  rawUrl: string,
+  storage: ReminderStorage = defaultStorage,
+  notifications: NotificationEngine = defaultNotificationEngine
+): Promise<{ success: boolean; message: string; data?: any }> {
+  if (!rawUrl) {
+    return { success: false, message: 'URL 不能为空' };
+  }
+  const action = parseUrlScheme(rawUrl);
+  return executeUrlAction(action, storage, notifications);
+}
+
