@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 
 export type FilterType = 'all' | 'pending' | 'completed' | 'repeating';
 
@@ -18,7 +18,11 @@ export const FilterBar: React.FC<FilterBarProps> = ({ currentFilter, onSelect, c
   ];
 
   return (
-    <View style={styles.container}>
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={styles.container}
+    >
       {filters.map((f) => {
         const active = currentFilter === f.key;
         return (
@@ -34,7 +38,7 @@ export const FilterBar: React.FC<FilterBarProps> = ({ currentFilter, onSelect, c
           </TouchableOpacity>
         );
       })}
-    </View>
+    </ScrollView>
   );
 };
 

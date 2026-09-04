@@ -33,6 +33,13 @@ agentreminder://create?title={标题}&date={YYYY-MM-DD}&time={HH:mm}&repeat={non
 1. 若未指定时间，系统将默认使用 08:00。
 2. 若未指定重复规则，系统将默认使用 hourly（每小时重复）。`;
 
+  const copyPrompt = () => {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(agentPrompt).catch(() => {});
+    }
+    Alert.alert('已复制提示词', 'AI Agent 接入提示词已准备就绪，可直接粘贴使用。');
+  };
+
   return (
     <ScrollView style={styles.container}>
       <View style={styles.card}>
@@ -58,8 +65,13 @@ agentreminder://create?title={标题}&date={YYYY-MM-DD}&time={HH:mm}&repeat={non
         <Text style={styles.cardTitle}>🤖 AI Agent 接入提示词模版</Text>
         <Text style={styles.cardDesc}>直接复制给 LLM 或 Agent 系统提示词：</Text>
         <View style={styles.promptBox}>
-          <Text style={styles.promptText}>{agentPrompt}</Text>
+          <Text style={styles.promptText} selectable={true}>
+            {agentPrompt}
+          </Text>
         </View>
+        <TouchableOpacity style={styles.copyButton} onPress={copyPrompt} activeOpacity={0.7}>
+          <Text style={styles.copyButtonText}>📋 复制提示词</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.card}>
@@ -151,5 +163,18 @@ const styles = StyleSheet.create({
   bold: {
     fontWeight: '600',
     color: '#007AFF',
+  },
+  copyButton: {
+    marginTop: 10,
+    backgroundColor: '#E8F3FF',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  copyButtonText: {
+    color: '#007AFF',
+    fontWeight: '600',
+    fontSize: 13,
   },
 });

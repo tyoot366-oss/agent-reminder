@@ -45,6 +45,7 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({ visible, onC
     });
     setTitle('');
     setNotes('');
+    setDate(getLocalTodayString());
     setTime(DEFAULT_TIME);
     setRepeat(DEFAULT_REPEAT);
     onClose();

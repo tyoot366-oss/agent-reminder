@@ -18,6 +18,7 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDe
         style={[styles.checkbox, item.isCompleted && styles.checkboxChecked]}
         onPress={() => onToggle(item.id)}
         activeOpacity={0.7}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
       >
         {item.isCompleted && <Text style={styles.checkmark}>✓</Text>}
       </TouchableOpacity>
@@ -51,6 +52,7 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDe
 
       <TouchableOpacity
         style={styles.deleteButton}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
         onPress={() => {
           Alert.alert('确认删除', `是否删除提醒「${item.title}」？`, [
             { text: '取消', style: 'cancel' },
