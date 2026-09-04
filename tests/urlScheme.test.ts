@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
-import { parseUrlScheme, executeUrlAction } from '../src/services/urlScheme.ts';
+import { parseUrlScheme, executeUrlAction, getLocalDateString } from '../src/services/urlScheme.ts';
 import { ReminderStorage } from '../src/services/storage.ts';
 import { NotificationEngine } from '../src/services/notifications.ts';
 
@@ -16,6 +16,18 @@ test('parseUrlScheme: 成功解析 agentreminder://create 并提取参数', () =
     assert.strictEqual(action.params.repeat, 'daily');
     assert.strictEqual(action.params.notes, '便利店');
   }
+});
+
+test('parseUrlScheme: 大小写不敏感解析与缺省日期回退本地时区日期', () => {
+  const upperAction = parseUrlScheme('agentreminder://CREATE?title=%E6%B5%8B%E8%AF%95');
+  assert.strictEqual(upperAction.type, 'create');
+  if (upperAction.type === 'create') {
+    assert.strictEqual(upperAction.params.title, '测试');
+    assert.strictEqual(upperAction.params.date, getLocalDateString());
+  }
+
+  const upperDel = parseUrlScheme('agentreminder://DELETE?id=rem_999');
+  assert.strictEqual(upperDel.type, 'delete');
 });
 
 test('parseUrlScheme: 成功解析 delete 与 toggle 动作', () => {
@@ -89,7 +101,29 @@ test('executeUrlAction: 自动补全默认值并存入 storage', async () => {
   assert.strictEqual(result.data.repeat, 'hourly');   // 默认注入 hourly
 });
 
-test('executeUrlAction: 完整流程覆盖 (create 标题为空校验失败, list 过滤, toggle, delete)', async () => {
+test('executeUrlAction: 校验非法日期格式', async () => {
+  const memoryAdapter = new Map<string, string>();
+  const storage = new ReminderStorage({
+    async getItem(k) { return memoryAdapter.get(k) || null; },
+    async setItem(k, v) { memoryAdapter.set(k, v); },
+    async removeItem(k) { memoryAdapter.delete(k); },
+  });
+  const notifications = new NotificationEngine();
+
+  // 1. 非法日期字符串格式
+  const actionInvalidStr = parseUrlScheme('agentreminder://create?title=Test&date=invalid-date');
+  const res1 = await executeUrlAction(actionInvalidStr, storage, notifications);
+  assert.strictEqual(res1.success, false);
+  assert.strictEqual(res1.message, '创建失败：日期格式无效，必须为 YYYY-MM-DD');
+
+  // 2. 超出月份范围日期
+  const actionInvalidMonth = parseUrlScheme('agentreminder://create?title=Test&date=2026-13-01');
+  const res2 = await executeUrlAction(actionInvalidMonth, storage, notifications);
+  assert.strictEqual(res2.success, false);
+  assert.strictEqual(res2.message, '创建失败：日期格式无效，必须为 YYYY-MM-DD');
+});
+
+test('executeUrlAction: 完整流程覆盖 (create 标题为空校验失败, list 过滤, toggle 通知同步, delete)', async () => {
   const memoryAdapter = new Map<string, string>();
   const storage = new ReminderStorage({
     async getItem(k) { return memoryAdapter.get(k) || null; },
@@ -109,21 +143,33 @@ test('executeUrlAction: 完整流程覆盖 (create 标题为空校验失败, lis
   const r1 = await executeUrlAction(item1Action, storage, notifications);
   assert.strictEqual(r1.success, true);
   const id1 = r1.data.id;
+  assert.strictEqual(notifications.isScheduled(id1), true);
 
   const item2Action = parseUrlScheme('agentreminder://create?title=Task2&date=2026-09-06');
   const r2 = await executeUrlAction(item2Action, storage, notifications);
   assert.strictEqual(r2.success, true);
   const id2 = r2.data.id;
+  assert.strictEqual(notifications.isScheduled(id2), true);
 
   // 3. list all
   const listAllResult = await executeUrlAction(parseUrlScheme('agentreminder://list'), storage, notifications);
   assert.strictEqual(listAllResult.success, true);
   assert.strictEqual(listAllResult.data.length, 2);
 
-  // 4. toggle 状态 (将 id1 标记为完成)
+  // 4. toggle 状态 (将 id1 标记为完成 -> 应该自动取消通知)
   const toggleResult = await executeUrlAction(parseUrlScheme(`agentreminder://toggle?id=${id1}`), storage, notifications);
   assert.strictEqual(toggleResult.success, true);
   assert.strictEqual(toggleResult.data.isCompleted, true);
+  assert.strictEqual(notifications.isScheduled(id1), false);
+
+  // 4b. 再次 toggle 状态 (将 id1 恢复为待办 -> 应该重新调度通知)
+  const toggleBackResult = await executeUrlAction(parseUrlScheme(`agentreminder://toggle?id=${id1}`), storage, notifications);
+  assert.strictEqual(toggleBackResult.success, true);
+  assert.strictEqual(toggleBackResult.data.isCompleted, false);
+  assert.strictEqual(notifications.isScheduled(id1), true);
+
+  // 将 id1 重新设为已完成，以便测试接下来的 pending 过滤
+  await executeUrlAction(parseUrlScheme(`agentreminder://toggle?id=${id1}`), storage, notifications);
 
   // 5. list pending / completed
   const pendingResult = await executeUrlAction(parseUrlScheme('agentreminder://list?filter=pending'), storage, notifications);
@@ -135,9 +181,9 @@ test('executeUrlAction: 完整流程覆盖 (create 标题为空校验失败, lis
   assert.strictEqual(completedResult.data[0].id, id1);
 
   // 6. delete
-  const deleteResult = await executeUrlAction(parseUrlScheme(`agentreminder://delete?id=${id1}`), storage, notifications);
+  const deleteResult = await executeUrlAction(parseUrlScheme(`agentreminder://delete?id=${id2}`), storage, notifications);
   assert.strictEqual(deleteResult.success, true);
-  assert.strictEqual(notifications.isScheduled(id1), false);
+  assert.strictEqual(notifications.isScheduled(id2), false);
 
   // 7. toggle 和 delete 不存在的 id
   const toggleNotFound = await executeUrlAction(parseUrlScheme('agentreminder://toggle?id=non_existent'), storage, notifications);

@@ -1,7 +1,7 @@
 import type { CreateReminderInput, RepeatRule } from '../types/reminder.ts';
 import type { ReminderStorage } from './storage.ts';
 import type { NotificationEngine } from './notifications.ts';
-import { applyReminderDefaults } from './defaults.ts';
+import { applyReminderDefaults, validateReminderDate } from './defaults.ts';
 
 export type ParsedUrlAction =
   | { type: 'create'; params: CreateReminderInput }
@@ -9,6 +9,13 @@ export type ParsedUrlAction =
   | { type: 'delete'; id: string }
   | { type: 'toggle'; id: string }
   | { type: 'unknown'; rawUrl: string; error: string };
+
+export function getLocalDateString(d: Date = new Date()): string {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
 
 export function parseUrlScheme(rawUrl: string): ParsedUrlAction {
   try {
@@ -19,12 +26,13 @@ export function parseUrlScheme(rawUrl: string): ParsedUrlAction {
 
     const hostnameOrPath = (parsed.hostname || parsed.pathname || '')
       .replace(/^\/+/, '')
-      .replace(/\/+$/, '');
+      .replace(/\/+$/, '')
+      .toLowerCase();
     const searchParams = parsed.searchParams;
 
     if (hostnameOrPath === 'create') {
       const title = searchParams.get('title') || searchParams.get('text') || '';
-      const date = searchParams.get('date') || new Date().toISOString().split('T')[0];
+      const date = searchParams.get('date') || getLocalDateString();
       const time = searchParams.get('time') || undefined;
       const repeatRaw = searchParams.get('repeat') || undefined;
       const notes = searchParams.get('notes') || undefined;
@@ -80,6 +88,9 @@ export async function executeUrlAction(
       if (!action.params.title || action.params.title.trim().length === 0) {
         return { success: false, message: '创建失败：必须提供 title 标题' };
       }
+      if (!validateReminderDate(action.params.date)) {
+        return { success: false, message: '创建失败：日期格式无效，必须为 YYYY-MM-DD' };
+      }
       const reminder = applyReminderDefaults(action.params);
       await storage.save(reminder);
       await notifications.schedule(reminder);
@@ -106,6 +117,11 @@ export async function executeUrlAction(
       }
       const updated = await storage.toggleStatus(action.id);
       if (updated) {
+        if (updated.isCompleted) {
+          await notifications.cancel(action.id);
+        } else {
+          await notifications.schedule(updated);
+        }
         return {
           success: true,
           message: `提醒状态已更新为：${updated.isCompleted ? '已完成' : '待办'}`,
