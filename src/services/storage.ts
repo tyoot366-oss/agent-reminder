@@ -1,5 +1,10 @@
 import type { ReminderItem } from '../types/reminder.ts';
 
+let FileSystem: typeof import('expo-file-system') | undefined;
+if (typeof process === 'undefined' || process.env.EXPO_OS) {
+  FileSystem = require('expo-file-system');
+}
+
 export interface StorageBackend {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
@@ -30,12 +35,65 @@ class LocalMemoryBackend implements StorageBackend {
   }
 }
 
+class FileSystemBackend implements StorageBackend {
+  private getFilePath(): string {
+    // Check if shared App Group container exists
+    if ((FileSystem as any).Paths?.appleSharedContainers) {
+      const container = (FileSystem as any).Paths.appleSharedContainers['group.com.anonymous.myapp'];
+      if (container) {
+        return container.uri + 'reminders.json';
+      }
+    }
+    // Fallback to document directory
+    return `${(FileSystem as any).documentDirectory}reminders.json`;
+  }
+
+  async getItem(key: string): Promise<string | null> {
+    if (!FileSystem) return null;
+    try {
+      const path = this.getFilePath();
+      const info = await FileSystem.getInfoAsync(path);
+      if (info.exists) {
+        return await FileSystem.readAsStringAsync(path);
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async setItem(key: string, value: string): Promise<void> {
+    if (!FileSystem) return;
+    try {
+      const path = this.getFilePath();
+      await FileSystem.writeAsStringAsync(path, value);
+    } catch {}
+  }
+
+  async removeItem(key: string): Promise<void> {
+    if (!FileSystem) return;
+    try {
+      const path = this.getFilePath();
+      const info = await FileSystem.getInfoAsync(path);
+      if (info.exists) {
+        await FileSystem.deleteAsync(path);
+      }
+    } catch {}
+  }
+}
+
 export class ReminderStorage {
   private backend: StorageBackend;
   private listeners = new Set<() => void>();
 
   constructor(backend?: StorageBackend) {
-    this.backend = backend || new LocalMemoryBackend();
+    if (backend) {
+      this.backend = backend;
+    } else if (typeof process !== 'undefined' && !process.env.EXPO_OS) {
+      this.backend = new LocalMemoryBackend();
+    } else {
+      this.backend = new FileSystemBackend();
+    }
   }
 
   subscribe(listener: () => void): () => void {
