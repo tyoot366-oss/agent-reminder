@@ -272,11 +272,35 @@ jobs:
       - name: Fake-sign Every Mach-O with ldid
         run: |
           brew install ldid
+          # 注入完整 entitlements，让通知等系统服务以正常 App 形态注册，并支持 App Groups 数据共享
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c "Print :CFBundleIdentifier" "$APP_PATH/Info.plist")
+          TEAM_ID="AAAAAAAAAA"
+          mkdir -p sign && cat > sign/ent.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>application-identifier</key>
+            <string>${TEAM_ID}.${BUNDLE_ID}</string>
+            <key>com.apple.developer.team-identifier</key>
+            <string>${TEAM_ID}</string>
+            <key>get-task-allow</key>
+            <true/>
+            <key>aps-environment</key>
+            <string>development</string>
+            <key>com.apple.security.application-groups</key>
+            <array>
+              <string>group.com.anonymous.myapp</string>
+            </array>
+          </dict>
+          </plist>
+          EOF
+          echo "Signing $BUNDLE_ID with entitlements:"; cat sign/ent.plist
           COUNT=0
           # 主二进制、Frameworks、PlugIns(appex) 内所有 Mach-O 全部伪签名；TrollStore/AppSync 安装时据此识别
           while IFS= read -r f; do
             if file "$f" | grep -q "Mach-O"; then
-              ldid -S "$f"
+              ldid -Ssign/ent.plist "$f"
               COUNT=$((COUNT+1))
               echo "fakesigned: $f"
             fi

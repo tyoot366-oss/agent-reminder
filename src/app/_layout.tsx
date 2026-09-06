@@ -7,6 +7,7 @@ import { useColorScheme } from 'react-native';
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import AppTabs from '@/components/app-tabs';
 import { handleIncomingUrl, shouldProcessIncomingUrl } from '@/services/urlScheme';
+import { defaultNotificationEngine } from '@/services/notifications';
 
 SplashScreen.preventAutoHideAsync();
 
@@ -52,6 +53,11 @@ export default function RootLayout() {
       subscription.remove();
     };
   }, [processUrl]);
+
+  // App 启动时请求通知授权：未请求过授权的 iOS App 不会出现在「设置→通知」中，调度的本地通知也会被系统丢弃
+  useEffect(() => {
+    defaultNotificationEngine.requestPermissions();
+  }, []);
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>

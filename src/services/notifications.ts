@@ -82,7 +82,8 @@ export class NotificationEngine {
     try {
       const settings = await Notifications.getPermissionsAsync();
       return settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
-    } catch {
+    } catch (e) {
+      console.warn('Failed to read notification permission', e);
       return true;
     }
   }
@@ -91,9 +92,15 @@ export class NotificationEngine {
     if (this.isNodeTest() || !Notifications) return true;
     try {
       const settings = await Notifications.requestPermissionsAsync();
-      return settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
-    } catch {
-      return true;
+      const granted =
+        settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
+      if (!granted) {
+        console.warn('Notification permission not granted:', settings);
+      }
+      return granted;
+    } catch (e) {
+      console.warn('Failed to request notification permission', e);
+      return false;
     }
   }
 

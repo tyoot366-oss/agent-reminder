@@ -139,7 +139,7 @@ agentreminder://list?filter=pending   # 可选: all | pending | completed | repe
 - Node.js >= 18.0.0
 - npm >= 9.0.0
 - iOS 17.1+ (真机测试或 iOS Simulator)
-- Xcode 15+ (仅需编译原生 AppIntents 时依赖)
+- Xcode 26.4+ (Expo SDK 57 / expo-modules-jsi 从源码编译的硬性要求，需 Swift 6.3；26.0–26.3 会编译失败)
 
 ### 安装与启动
 ```bash

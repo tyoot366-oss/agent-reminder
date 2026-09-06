@@ -126,10 +126,18 @@ export default function RemindersScreen() {
   const handleAdd = useCallback(
     async (input: CreateReminderInput) => {
       try {
+        // 兜底：启动时已请求过一次；若用户曾拒绝，这里返回 false 并引导前往系统设置开启
+        const granted = await defaultNotificationEngine.requestPermissions();
         const item = applyReminderDefaults(input);
         await defaultStorage.save(item);
         await defaultNotificationEngine.schedule(item);
         await loadReminders();
+        if (!granted) {
+          Alert.alert(
+            '通知权限未开启',
+            '提醒已保存，但到点不会弹出通知。请前往「设置 → 通知 → AgentReminder」允许通知。',
+          );
+        }
       } catch (err: any) {
         console.error('Failed to add reminder:', err);
         Alert.alert('操作失败', err?.message || '创建提醒失败，请重试');
