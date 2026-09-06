@@ -57,6 +57,22 @@ const withAppIntents = (config) => {
           }
         }
       }
+
+      // 禁用 parallelizeBuildables，确保 Pods modulemap 先生成再编译主应用 Swift 代码
+      const projectName = config.modRequest.projectName || 'AgentReminder';
+      const xcschemePath = path.join(
+        platformProjectRoot,
+        `${projectName}.xcodeproj`,
+        'xcshareddata',
+        'xcschemes',
+        `${projectName}.xcscheme`
+      );
+      if (fs.existsSync(xcschemePath)) {
+        let xcscheme = fs.readFileSync(xcschemePath, 'utf8');
+        xcscheme = xcscheme.replace(/parallelizeBuildables = "YES"/g, 'parallelizeBuildables = "NO"');
+        fs.writeFileSync(xcschemePath, xcscheme, 'utf8');
+      }
+
       return config;
     },
   ]);

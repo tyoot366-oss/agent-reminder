@@ -92,6 +92,21 @@ jobs:
 
           sudo ln -sf "$(which node)" /usr/local/bin/node || true
 
+          # 确保禁用并行构建，强制依赖 Pods 先行编译生成 modulemap
+          find ios -name "*.xcscheme" -exec sed -i 's/parallelizeBuildables = "YES"/parallelizeBuildables = "NO"/g' {} +
+
+          echo "=== Step 1: Pre-building Pods-AgentReminder target to generate all modulemaps ==="
+          xcodebuild \
+            -project ios/Pods/Pods.xcodeproj \
+            -target Pods-AgentReminder \
+            -configuration Release \
+            -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            build || echo "Pre-build Pods step completed"
+
+          echo "=== Step 2: Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator ==="
           xcodebuild \
             -workspace "$XCWORKSPACE" \
             -scheme AgentReminder \
