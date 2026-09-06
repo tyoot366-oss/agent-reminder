@@ -21,12 +21,24 @@ const withAppIntents = (config) => {
     return config;
   });
 
-  // 3. 在 prebuild 生成原生工程时，自动同步原生 Swift App Intents 代码
+  // 3. 在 prebuild 生成原生工程时，自动同步原生 Swift App Intents 代码与配置
   config = withDangerousMod(config, [
     'ios',
     async (config) => {
       const projectRoot = config.modRequest.projectRoot;
       const platformProjectRoot = config.modRequest.platformProjectRoot;
+
+      // 禁用 EXPO_USE_PRECOMPILED_MODULES，确保 CocoaPods 从源码完整编译生成 Release 架构下的 modulemap
+      const podfilePropsPath = path.join(platformProjectRoot, 'Podfile.properties.json');
+      let props = {};
+      if (fs.existsSync(podfilePropsPath)) {
+        try {
+          props = JSON.parse(fs.readFileSync(podfilePropsPath, 'utf8'));
+        } catch (_) {}
+      }
+      props['EXPO_USE_PRECOMPILED_MODULES'] = 'false';
+      fs.writeFileSync(podfilePropsPath, JSON.stringify(props, null, 2));
+
       const srcDir = path.join(projectRoot, 'ios-native', 'AppIntents');
       const targetDir = path.join(
         platformProjectRoot,

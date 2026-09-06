@@ -62,11 +62,23 @@ jobs:
         run: npx expo prebuild --platform ios --clean --no-install
 
       - name: Install CocoaPods Dependencies
+        env:
+          EXPO_USE_PRECOMPILED_MODULES: "0"
         run: |
+          node -e '
+            const fs = require("fs");
+            const p = "ios/Podfile.properties.json";
+            const json = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : {};
+            json["EXPO_USE_PRECOMPILED_MODULES"] = "false";
+            fs.writeFileSync(p, JSON.stringify(json, null, 2));
+            console.log("Updated ios/Podfile.properties.json:", json);
+          '
           cd ios
           pod install
 
       - name: Build for iOS Simulator (Release)
+        env:
+          EXPO_USE_PRECOMPILED_MODULES: "0"
         run: |
           set -o pipefail
           echo "=== Content of ios directory ==="
@@ -77,6 +89,9 @@ jobs:
             exit 1
           fi
           echo "Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator..."
+
+          sudo ln -sf "$(which node)" /usr/local/bin/node || true
+
           xcodebuild \
             -workspace "$XCWORKSPACE" \
             -scheme AgentReminder \
@@ -91,6 +106,10 @@ jobs:
               echo "==================== BUILD FAILED: ERRORS BELOW ===================="
               grep -E 'error: |fatal error: |FAILED' xcodebuild.log | head -n 40 || tail -n 60 xcodebuild.log
               echo "==================================================================="
+              echo "### ❌ iOS Simulator Build Failed" >> $GITHUB_STEP_SUMMARY
+              echo '```text' >> $GITHUB_STEP_SUMMARY
+              grep -E 'error: |fatal error: |FAILED' xcodebuild.log | head -n 30 >> $GITHUB_STEP_SUMMARY || tail -n 30 xcodebuild.log >> $GITHUB_STEP_SUMMARY
+              echo '```' >> $GITHUB_STEP_SUMMARY
               exit 1
             }
 
@@ -108,3 +127,9 @@ jobs:
           name: AgentReminder-iOS-Simulator
           path: dist/AgentReminder-iOS-Simulator.tar.gz
           retention-days: 14
+
+      - name: Report Build Success
+        if: success()
+        run: |
+          echo "### 🎉 Build Succeeded!" >> $GITHUB_STEP_SUMMARY
+          echo "AgentReminder iOS Simulator build completed successfully. Artifact is ready for download." >> $GITHUB_STEP_SUMMARY
