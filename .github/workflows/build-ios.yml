@@ -36,10 +36,21 @@ jobs:
   build-ios-simulator:
     name: Build iOS Simulator (.app)
     needs: test
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Select Xcode 16.1+
+        run: |
+          echo "Available Xcode installations:"
+          ls -d /Applications/Xcode*
+          XCODE_APP=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | tail -n 1)
+          if [ -n "$XCODE_APP" ]; then
+            echo "Selecting $XCODE_APP"
+            sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          fi
+          xcodebuild -version
 
       - name: Setup Node.js (v22)
         uses: actions/setup-node@v4
