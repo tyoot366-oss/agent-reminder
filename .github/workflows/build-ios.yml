@@ -55,22 +55,24 @@ jobs:
 
       - name: Build for iOS Simulator (Release)
         run: |
-          XCWORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
-          XCSCHEME=$(xcodebuild -list -json -workspace "$XCWORKSPACE" | node -e '
-            const fs = require("fs");
-            const data = JSON.parse(fs.readFileSync(0));
-            const schemes = data.workspace ? data.workspace.schemes : (data.project ? data.project.schemes : []);
-            console.log(schemes[0] || "AgentReminder");
-          ')
-          echo "Building workspace: $XCWORKSPACE, scheme: $XCSCHEME"
+          set -o pipefail
+          echo "Building AgentReminder for iOS Simulator..."
           xcodebuild \
-            -workspace "$XCWORKSPACE" \
-            -scheme "$XCSCHEME" \
+            -workspace ios/AgentReminder.xcworkspace \
+            -scheme AgentReminder \
             -configuration Release \
             -destination 'generic/platform=iOS Simulator' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
-            build
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tee xcodebuild.log || {
+              echo "==================== BUILD FAILED: ERRORS BELOW ===================="
+              grep -E 'error: |fatal error: |FAILED' xcodebuild.log | head -n 40 || tail -n 60 xcodebuild.log
+              echo "==================================================================="
+              exit 1
+            }
 
       - name: Package App for Distribution
         run: |
