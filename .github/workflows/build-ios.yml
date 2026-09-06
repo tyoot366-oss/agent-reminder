@@ -172,3 +172,132 @@ jobs:
         run: |
           echo "### 🎉 Build Succeeded!" >> $GITHUB_STEP_SUMMARY
           echo "AgentReminder iOS Simulator build completed successfully. Artifact is ready for download." >> $GITHUB_STEP_SUMMARY
+
+  # 免证书真机 IPA：ldid 伪签名，供越狱设备通过 TrollStore / AppSync Unified 安装（无需 Apple 账号、无需 Mac）
+  build-ios-jailbreak-ipa:
+    name: Build Jailbreak Device IPA (unsigned/fakesigned)
+    needs: test
+    runs-on: macos-26
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Xcode (26.6 — Expo SDK 57 requires Xcode 26.4+)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.6'
+
+      - name: Verify Xcode Version
+        run: xcodebuild -version
+
+      - name: Setup Node.js (v22)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Generate Native iOS Project (Expo Prebuild)
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods Dependencies
+        env:
+          EXPO_USE_PRECOMPILED_MODULES: "0"
+        run: |
+          node -e '
+            const fs = require("fs");
+            const p = "ios/Podfile.properties.json";
+            const json = fs.existsSync(p) ? JSON.parse(fs.readFileSync(p, "utf8")) : {};
+            json["EXPO_USE_PRECOMPILED_MODULES"] = "false";
+            fs.writeFileSync(p, JSON.stringify(json, null, 2));
+            console.log("Updated ios/Podfile.properties.json:", json);
+          '
+          cd ios
+          pod install
+
+      - name: Disable parallelizeBuildables (modulemap ordering)
+        run: |
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            function patchSchemes(dir) {
+              if (!fs.existsSync(dir)) return;
+              for (const item of fs.readdirSync(dir)) {
+                const full = path.join(dir, item);
+                if (fs.statSync(full).isDirectory()) patchSchemes(full);
+                else if (item.endsWith(".xcscheme")) {
+                  let c = fs.readFileSync(full, "utf8");
+                  if (c.includes("parallelizeBuildables = \"YES\"")) {
+                    c = c.replace(/parallelizeBuildables = \"YES\"/g, "parallelizeBuildables = \"NO\"");
+                    fs.writeFileSync(full, c, "utf8");
+                    console.log("Patched parallelizeBuildables in", full);
+                  }
+                }
+              }
+            }
+            patchSchemes("ios");
+          '
+
+      - name: Build Unsigned App for iOS Device (Release, arm64)
+        run: |
+          set -o pipefail
+          XCWORKSPACE="ios/AgentReminder.xcworkspace"
+          if [ ! -d "$XCWORKSPACE" ]; then
+            XCWORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          fi
+          echo "Building workspace: $XCWORKSPACE (generic/platform=iOS)"
+          # 真机构建、完全不签名；generic/platform=iOS 只产出 arm64 真机架构
+          xcodebuild \
+            -workspace "$XCWORKSPACE" \
+            -scheme AgentReminder \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            CODE_SIGN_ENTITLEMENTS="" \
+            build 2>&1 | tee xcodebuild.log || {
+              echo "==================== BUILD FAILED: ERRORS BELOW ===================="
+              grep -E 'error: |fatal error: |FAILED' xcodebuild.log | head -n 40 || tail -n 60 xcodebuild.log
+              exit 1
+            }
+          APP_PATH=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -n 1)
+          if [ -z "$APP_PATH" ]; then echo "ERROR: .app not found under Release-iphoneos"; exit 1; fi
+          echo "Built device app: $APP_PATH"
+          echo "APP_PATH=$APP_PATH" >> "$GITHUB_ENV"
+
+      - name: Fake-sign Every Mach-O with ldid
+        run: |
+          brew install ldid
+          COUNT=0
+          # 主二进制、Frameworks、PlugIns(appex) 内所有 Mach-O 全部伪签名；TrollStore/AppSync 安装时据此识别
+          while IFS= read -r f; do
+            if file "$f" | grep -q "Mach-O"; then
+              ldid -S "$f"
+              COUNT=$((COUNT+1))
+              echo "fakesigned: $f"
+            fi
+          done < <(find "$APP_PATH" -type f)
+          echo "Total fakesigned Mach-O files: $COUNT"
+          if [ "$COUNT" -eq 0 ]; then echo "ERROR: no Mach-O found to sign"; exit 1; fi
+
+      - name: Assemble IPA (Payload layout)
+        run: |
+          rm -rf Payload && mkdir Payload
+          cp -r "$APP_PATH" Payload/
+          mkdir -p dist
+          # TrollStore / AppSync 均要求标准 ipa 结构：Payload/<App>.app
+          zip -qr dist/AgentReminder-jailbreak.ipa Payload
+          echo "=== IPA contents (top level) ==="
+          unzip -l dist/AgentReminder-jailbreak.ipa | head -n 15
+          ls -lh dist/AgentReminder-jailbreak.ipa
+
+      - name: Upload Jailbreak IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: AgentReminder-jailbreak-ipa
+          path: dist/AgentReminder-jailbreak.ipa
+          retention-days: 14
