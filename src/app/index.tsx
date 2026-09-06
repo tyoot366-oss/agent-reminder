@@ -178,18 +178,8 @@ export default function RemindersScreen() {
           <Text style={styles.headerSubtitle}>{getTodayDisplayString()}</Text>
           <Text style={styles.headerTitle}>全部提醒</Text>
         </View>
-        <View style={styles.headerRight}>
-          <View style={styles.countBadge}>
-            <Text style={styles.countBadgeText}>{counts.pending} 待办</Text>
-          </View>
-          <TouchableOpacity
-            style={styles.headerAddButton}
-            onPress={() => setIsAddModalVisible(true)}
-            activeOpacity={0.7}
-            accessibilityLabel="新建提醒"
-          >
-            <Text style={styles.headerAddButtonText}>＋</Text>
-          </TouchableOpacity>
+        <View style={styles.countBadge}>
+          <Text style={styles.countBadgeText}>{counts.pending} 待办</Text>
         </View>
       </View>
 
@@ -269,37 +259,12 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     marginTop: 2,
   },
-  headerRight: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  },
-  headerAddButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#007AFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#007AFF',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 3,
-  },
-  headerAddButtonText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    lineHeight: 22,
-    fontWeight: '500',
-    marginTop: -1,
-  },
   countBadge: {
     backgroundColor: '#E8F3FF',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
+    marginBottom: 4,
   },
   countBadgeText: {
     fontSize: 13,
