@@ -36,18 +36,30 @@ jobs:
   build-ios-simulator:
     name: Build iOS Simulator (.app)
     needs: test
-    runs-on: macos-15
+    # Expo SDK 57 的 expo-modules-jsi 必须用 Xcode 26.4+（Swift 6.3）从源码编译；
+    # macos-15 镜像最高只自带 Xcode 26.3（Swift 6.2，存在 Swift/C++ interop 编译器回归，
+    # 会在 RuntimeScheduler.h 报 SWIFT_RETURNS_RETAINED 错误），因此必须使用 macos-26 镜像。
+    runs-on: macos-26
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Xcode (Latest Stable)
+      - name: Setup Xcode (26.6 — Expo SDK 57 requires Xcode 26.4+)
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: latest-stable
+          # 显式钉版本，避免 latest-stable 漂移到不兼容版本重蹈覆辙
+          xcode-version: '26.6'
 
-      - name: Verify Xcode Version
-        run: xcodebuild -version
+      - name: Verify Xcode Version (require 26.4+)
+        run: |
+          xcodebuild -version
+          XCODE_VERSION=$(xcodebuild -version | awk '/Xcode/{print $2}')
+          echo "Selected Xcode version: $XCODE_VERSION"
+          # expo-modules-jsi 在 Xcode 26.0-26.3 (Swift 6.2) 下编译必失败，26.4 (Swift 6.3) 起修复
+          if [ "$(printf '%s\n%s\n' '26.4' "$XCODE_VERSION" | sort -V | head -n1)" != '26.4' ]; then
+            echo "ERROR: Expo SDK 57 requires Xcode 26.4+ (Swift 6.3), but got $XCODE_VERSION"
+            exit 1
+          fi
 
       - name: Setup Node.js (v22)
         uses: actions/setup-node@v4
