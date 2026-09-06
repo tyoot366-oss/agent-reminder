@@ -27,6 +27,9 @@ jobs:
       - name: Run Unit Tests (27/27)
         run: npm test
 
+      - name: Ensure Expo Environment Types
+        run: test -f expo-env.d.ts || echo '/// <reference types="expo/types" />' > expo-env.d.ts
+
       - name: Run TypeScript Verification
         run: npx tsc --noEmit
 
