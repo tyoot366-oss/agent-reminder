@@ -41,3 +41,23 @@ example
 # generated native folders
 /ios
 /android
+
+# Internal agent tooling & prompt rules (irrelevant to application distribution)
+.agents/
+.claude/
+.superpowers/
+.vscode/
+AGENTS.md
+CLAUDE.md
+
+# Environment, secrets & credentials
+.env
+.env.*
+*.pem
+*.key
+
+# Logs & temp scratch files
+*.log
+scratch/
+test-*.mjs
+test-*.js
