@@ -15,17 +15,17 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (v22 LTS for native TypeScript type stripping)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
         run: npm ci
 
       - name: Run Unit Tests (27/27)
-        run: node --experimental-strip-types --test tests/*.test.ts
+        run: npm test
 
       - name: Run TypeScript Verification
         run: npx tsc --noEmit
@@ -38,10 +38,10 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
+      - name: Setup Node.js (v22)
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: 'npm'
 
       - name: Install Dependencies
@@ -53,11 +53,11 @@ jobs:
       - name: Build for iOS Simulator (Release)
         run: |
           XCWORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
-          XCSCHEME=$(xcodebuild -list -json | node -e '
+          XCSCHEME=$(xcodebuild -list -json -workspace "$XCWORKSPACE" | node -e '
             const fs = require("fs");
             const data = JSON.parse(fs.readFileSync(0));
-            const schemes = data.workspace ? data.workspace.schemes : data.project.schemes;
-            console.log(schemes[0]);
+            const schemes = data.workspace ? data.workspace.schemes : (data.project ? data.project.schemes : []);
+            console.log(schemes[0] || "1");
           ')
           echo "Building workspace: $XCWORKSPACE, scheme: $XCSCHEME"
           xcodebuild \
