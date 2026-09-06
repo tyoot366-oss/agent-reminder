@@ -20,11 +20,23 @@ export function getLocalDateString(d: Date = new Date()): string {
 export function parseUrlScheme(rawUrl: string): ParsedUrlAction {
   try {
     const parsed = new URL(rawUrl);
-    if (parsed.protocol !== 'agentreminder:') {
+    const isStandardScheme = parsed.protocol === 'agentreminder:';
+    const rawPathFull = (parsed.hostname || '') + (parsed.pathname || '');
+    const isExpoScheme =
+      parsed.protocol === 'exp:' ||
+      parsed.protocol === 'exps:' ||
+      ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && rawPathFull.includes('/--/'));
+
+    if (!isStandardScheme && !isExpoScheme) {
       return { type: 'unknown', rawUrl, error: `Invalid protocol: ${parsed.protocol}` };
     }
 
-    const hostnameOrPath = (parsed.hostname || parsed.pathname || '')
+    let rawPath = parsed.hostname || parsed.pathname || '';
+    if (isExpoScheme && rawPath.includes('/--/')) {
+      rawPath = rawPath.split('/--/')[1] || '';
+    }
+
+    const hostnameOrPath = rawPath
       .replace(/^\/+/, '')
       .replace(/\/+$/, '')
       .toLowerCase();

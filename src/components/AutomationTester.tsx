@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
 import * as Linking from 'expo-linking';
+import { handleIncomingUrl } from '../services/urlScheme';
 
 function getLocalTodayString(): string {
   const d = new Date();
@@ -20,9 +21,31 @@ export const AutomationTester: React.FC = () => {
 
   const triggerTestUrl = async () => {
     try {
-      await Linking.openURL(generatedUrl);
+      // 1. 尝试系统级原生 URL Scheme 唤起（适用于已打包独立客户端）
+      const canOpen = await Linking.canOpenURL(generatedUrl).catch(() => false);
+      if (canOpen) {
+        await Linking.openURL(generatedUrl);
+        return;
+      }
+      // 2. 在 Expo Go 预览或未注册系统协议的环境下，由内置调度引擎直接执行
+      const res = await handleIncomingUrl(generatedUrl);
+      if (res.success) {
+        Alert.alert('✅ 唤起执行成功 (Expo 预览模式)', res.message);
+      } else {
+        Alert.alert('处理失败', res.message);
+      }
     } catch (e: any) {
-      Alert.alert('打开失败', e?.message || '无法唤起 URL Scheme');
+      // 3. 若 Linking.openURL 抛出异常（如 iOS 报无法打开此 URL），平滑回退至内置调度器
+      try {
+        const res = await handleIncomingUrl(generatedUrl);
+        if (res.success) {
+          Alert.alert('✅ 唤起执行成功 (Expo 预览模式)', res.message);
+        } else {
+          Alert.alert('处理失败', res.message);
+        }
+      } catch (innerErr: any) {
+        Alert.alert('打开失败', innerErr?.message || e?.message || '无法唤起 URL Scheme');
+      }
     }
   };
 

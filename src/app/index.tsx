@@ -10,7 +10,7 @@ import {
   Alert,
   type AppStateStatus,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { ReminderCard } from '@/components/ReminderCard';
 import { FilterBar } from '@/components/FilterBar';
@@ -39,6 +39,7 @@ function getTodayDisplayString(): string {
 }
 
 export default function RemindersScreen() {
+  const insets = useSafeAreaInsets();
   const [reminders, setReminders] = useState<ReminderItem[]>([]);
   const [currentFilter, setCurrentFilter] = useState<FilterType>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -177,8 +178,18 @@ export default function RemindersScreen() {
           <Text style={styles.headerSubtitle}>{getTodayDisplayString()}</Text>
           <Text style={styles.headerTitle}>全部提醒</Text>
         </View>
-        <View style={styles.countBadge}>
-          <Text style={styles.countBadgeText}>{counts.pending} 待办</Text>
+        <View style={styles.headerRight}>
+          <View style={styles.countBadge}>
+            <Text style={styles.countBadgeText}>{counts.pending} 待办</Text>
+          </View>
+          <TouchableOpacity
+            style={styles.headerAddButton}
+            onPress={() => setIsAddModalVisible(true)}
+            activeOpacity={0.7}
+            accessibilityLabel="新建提醒"
+          >
+            <Text style={styles.headerAddButtonText}>＋</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -209,9 +220,12 @@ export default function RemindersScreen() {
         }
       />
 
-      {/* 浮动「+」添加按钮 */}
+      {/* 浮动「+」添加按钮 (避开底部 TabBar 遮挡，保持高 zIndex) */}
       <TouchableOpacity
-        style={styles.fab}
+        style={[
+          styles.fab,
+          { bottom: Math.max(insets.bottom, 16) + 64 },
+        ]}
         onPress={() => setIsAddModalVisible(true)}
         activeOpacity={0.8}
         accessibilityLabel="新建提醒"
@@ -255,12 +269,37 @@ const styles = StyleSheet.create({
     color: '#1C1C1E',
     marginTop: 2,
   },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 4,
+  },
+  headerAddButton: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#007AFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#007AFF',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 3,
+  },
+  headerAddButtonText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    lineHeight: 22,
+    fontWeight: '500',
+    marginTop: -1,
+  },
   countBadge: {
     backgroundColor: '#E8F3FF',
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 12,
-    marginBottom: 4,
   },
   countBadgeText: {
     fontSize: 13,
@@ -274,7 +313,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingVertical: 10,
-    paddingBottom: 96,
+    paddingBottom: 140,
   },
   listContentEmpty: {
     flexGrow: 1,
@@ -305,7 +344,6 @@ const styles = StyleSheet.create({
   fab: {
     position: 'absolute',
     right: 20,
-    bottom: 28,
     width: 58,
     height: 58,
     borderRadius: 29,
@@ -316,7 +354,8 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 6,
-    elevation: 6,
+    elevation: 10,
+    zIndex: 9999,
   },
   fabText: {
     fontSize: 32,
