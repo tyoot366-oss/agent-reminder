@@ -46,10 +46,13 @@ jobs:
           echo "Available Xcode installations:"
           ls -d /Applications/Xcode*
           XCODE_APP=$(ls -d /Applications/Xcode_16*.app 2>/dev/null | tail -n 1)
-          if [ -n "$XCODE_APP" ]; then
-            echo "Selecting $XCODE_APP"
-            sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          if [ -z "$XCODE_APP" ]; then
+            XCODE_APP="/Applications/Xcode_16.2.app"
           fi
+          echo "Selected: $XCODE_APP"
+          sudo xcode-select -s "$XCODE_APP/Contents/Developer"
+          echo "DEVELOPER_DIR=$XCODE_APP/Contents/Developer" >> $GITHUB_ENV
+          export DEVELOPER_DIR="$XCODE_APP/Contents/Developer"
           xcodebuild -version
 
       - name: Setup Node.js (v22)
