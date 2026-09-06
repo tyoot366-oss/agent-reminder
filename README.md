@@ -173,6 +173,37 @@ npx expo run:ios
 
 ---
 
+## ☁️ 通过 GitHub 云端编译项目
+
+本项目已全面配置 **GitHub Actions 自动化流水线** 与 **Expo EAS Build**，支持在云端直接编译出 iOS 产物：
+
+### 方式 1：通过 GitHub Actions 自动编译 (免费 / 无需 Apple 开发者账号)
+项目已内置完整 CI/CD 配置：[`.github/workflows/build-ios.yml`](.github/workflows/build-ios.yml)。
+1. **自动触发**：向 `main` 分支提交代码或发起 Pull Request 时自动启动。
+2. **手动触发**：
+   - 打开 GitHub 仓库页面，点击顶部 **Actions** 标签。
+   - 在左侧选择 **CI & iOS Build** 工作流，点击右侧 **Run workflow** 按钮。
+3. **获取产物**：
+   - 工作流会自动执行测试、TypeScript 校验，并在 GitHub 托管的 `macos-14` (Apple Silicon) 虚拟机上完成原生 iOS 编译。
+   - 编译完成后，在 Actions 运行详情页底部的 **Artifacts** 区域即可一键下载 `AgentReminder-iOS-Simulator.tar.gz`（解压后的 `.app` 可直接拖入 Mac 上的 iOS 模拟器运行）。
+
+### 方式 2：通过 Expo EAS Build 编译真机安装包 (.ipa)
+项目已内置标准配置文件：[`eas.json`](eas.json)。
+```bash
+# 1. 安装 EAS CLI 并登录
+npm install -g eas-cli
+eas login
+
+# 2. 发起云端构建 (免费套餐即可使用)
+# 编译模拟器包 (免开发者账号)
+eas build --platform ios --profile preview
+
+# 编译真机安装包 / TestFlight (需 Apple 开发者账号)
+eas build --platform ios --profile production
+```
+
+---
+
 ## 📄 开源许可证
 
 本项目基于 [MIT License](LICENSE) 开源。
