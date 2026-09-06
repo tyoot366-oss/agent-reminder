@@ -60,7 +60,7 @@ jobs:
             const fs = require("fs");
             const data = JSON.parse(fs.readFileSync(0));
             const schemes = data.workspace ? data.workspace.schemes : (data.project ? data.project.schemes : []);
-            console.log(schemes[0] || "1");
+            console.log(schemes[0] || "AgentReminder");
           ')
           echo "Building workspace: $XCWORKSPACE, scheme: $XCSCHEME"
           xcodebuild \

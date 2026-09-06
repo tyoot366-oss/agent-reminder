@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "1",
-    "slug": "1",
+    "name": "AgentReminder",
+    "slug": "agent-reminder",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",

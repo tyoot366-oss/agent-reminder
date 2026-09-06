@@ -30,7 +30,7 @@ const withAppIntents = (config) => {
       const srcDir = path.join(projectRoot, 'ios-native', 'AppIntents');
       const targetDir = path.join(
         platformProjectRoot,
-        config.modRequest.projectName || '1',
+        config.modRequest.projectName || 'AgentReminder',
         'AppIntents'
       );
 
