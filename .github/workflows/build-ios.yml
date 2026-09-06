@@ -51,14 +51,26 @@ jobs:
         run: npm ci
 
       - name: Generate Native iOS Project (Expo Prebuild)
-        run: npx expo prebuild --platform ios --clean
+        run: npx expo prebuild --platform ios --clean --no-install
+
+      - name: Install CocoaPods Dependencies
+        run: |
+          cd ios
+          pod install
 
       - name: Build for iOS Simulator (Release)
         run: |
           set -o pipefail
-          echo "Building AgentReminder for iOS Simulator..."
+          echo "=== Content of ios directory ==="
+          ls -la ios
+          XCWORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
+          if [ -z "$XCWORKSPACE" ]; then
+            echo "ERROR: No .xcworkspace found!"
+            exit 1
+          fi
+          echo "Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator..."
           xcodebuild \
-            -workspace ios/AgentReminder.xcworkspace \
+            -workspace "$XCWORKSPACE" \
             -scheme AgentReminder \
             -configuration Release \
             -destination 'generic/platform=iOS Simulator' \
