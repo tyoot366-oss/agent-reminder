@@ -83,30 +83,42 @@ jobs:
           set -o pipefail
           echo "=== Content of ios directory ==="
           ls -la ios
-          XCWORKSPACE=$(find ios -name "*.xcworkspace" | head -n 1)
-          if [ -z "$XCWORKSPACE" ]; then
-            echo "ERROR: No .xcworkspace found!"
+          # 精准选取顶层 CocoaPods 聚合 workspace（绝不能使用 xcodeproj 内部的 project.xcworkspace）
+          XCWORKSPACE="ios/AgentReminder.xcworkspace"
+          if [ ! -d "$XCWORKSPACE" ]; then
+            XCWORKSPACE=$(find ios -maxdepth 1 -name "*.xcworkspace" | head -n 1)
+          fi
+          if [ -z "$XCWORKSPACE" ] || [ ! -d "$XCWORKSPACE" ]; then
+            echo "ERROR: CocoaPods workspace not found in ios directory!"
             exit 1
           fi
-          echo "Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator..."
+          echo "Selected CocoaPods workspace: $XCWORKSPACE"
 
           sudo ln -sf "$(which node)" /usr/local/bin/node || true
 
-          # 确保禁用并行构建，强制依赖 Pods 先行编译生成 modulemap
-          find ios -name "*.xcscheme" -exec sed -i 's/parallelizeBuildables = "YES"/parallelizeBuildables = "NO"/g' {} +
+          # 使用 Node.js 跨平台禁用 parallelizeBuildables，避免 macOS BSD sed 语法差异
+          node -e '
+            const fs = require("fs");
+            const path = require("path");
+            function patchSchemes(dir) {
+              if (!fs.existsSync(dir)) return;
+              for (const item of fs.readdirSync(dir)) {
+                const full = path.join(dir, item);
+                if (fs.statSync(full).isDirectory()) patchSchemes(full);
+                else if (item.endsWith(".xcscheme")) {
+                  let c = fs.readFileSync(full, "utf8");
+                  if (c.includes("parallelizeBuildables = \"YES\"")) {
+                    c = c.replace(/parallelizeBuildables = \"YES\"/g, "parallelizeBuildables = \"NO\"");
+                    fs.writeFileSync(full, c, "utf8");
+                    console.log("Patched parallelizeBuildables in", full);
+                  }
+                }
+              }
+            }
+            patchSchemes("ios");
+          '
 
-          echo "=== Step 1: Pre-building Pods-AgentReminder target to generate all modulemaps ==="
-          xcodebuild \
-            -project ios/Pods/Pods.xcodeproj \
-            -target Pods-AgentReminder \
-            -configuration Release \
-            -destination 'generic/platform=iOS Simulator' \
-            -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            build || echo "Pre-build Pods step completed"
-
-          echo "=== Step 2: Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator ==="
+          echo "=== Building workspace: $XCWORKSPACE for AgentReminder on iOS Simulator ==="
           xcodebuild \
             -workspace "$XCWORKSPACE" \
             -scheme AgentReminder \
