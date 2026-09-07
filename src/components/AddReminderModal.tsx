@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Modal,
   View,
@@ -10,13 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import type { CreateReminderInput, RepeatRule } from '../types/reminder';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import type { CreateReminderInput, ReminderItem, RepeatRule } from '../types/reminder';
 import { DEFAULT_TIME, DEFAULT_REPEAT } from '../services/defaults';
 
 export interface AddReminderModalProps {
   visible: boolean;
   onClose: () => void;
-  onAdd: (input: CreateReminderInput) => void;
+  onAdd?: (input: CreateReminderInput) => void;
+  onSave?: (input: CreateReminderInput) => void;
+  initialData?: ReminderItem | null;
 }
 
 function getLocalTodayString(): string {
@@ -27,27 +30,49 @@ function getLocalTodayString(): string {
   return `${year}-${month}-${day}`;
 }
 
-export const AddReminderModal: React.FC<AddReminderModalProps> = ({ visible, onClose, onAdd }) => {
+export const AddReminderModal: React.FC<AddReminderModalProps> = ({
+  visible,
+  onClose,
+  onAdd,
+  onSave,
+  initialData,
+}) => {
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [date, setDate] = useState(getLocalTodayString());
   const [time, setTime] = useState(DEFAULT_TIME);
   const [repeat, setRepeat] = useState<RepeatRule>(DEFAULT_REPEAT);
 
+  useEffect(() => {
+    if (initialData) {
+      setTitle(initialData.title);
+      setNotes(initialData.notes || '');
+      setDate(initialData.date);
+      setTime(initialData.time);
+      setRepeat(initialData.repeat);
+    } else {
+      setTitle('');
+      setNotes('');
+      setDate(getLocalTodayString());
+      setTime(DEFAULT_TIME);
+      setRepeat(DEFAULT_REPEAT);
+    }
+  }, [initialData, visible]);
+
   const handleSave = () => {
     if (!title.trim()) return;
-    onAdd({
+    const payload: CreateReminderInput = {
       title: title.trim(),
       notes: notes.trim() || undefined,
       date,
       time,
       repeat,
-    });
-    setTitle('');
-    setNotes('');
-    setDate(getLocalTodayString());
-    setTime(DEFAULT_TIME);
-    setRepeat(DEFAULT_REPEAT);
+    };
+    if (onSave) {
+      onSave(payload);
+    } else if (onAdd) {
+      onAdd(payload);
+    }
     onClose();
   };
 
@@ -59,67 +84,85 @@ export const AddReminderModal: React.FC<AddReminderModalProps> = ({ visible, onC
     { key: 'weekly', label: '每周' },
   ];
 
+  const isEditing = Boolean(initialData);
+
   return (
-    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={onClose}>
-            <Text style={styles.cancelText}>取消</Text>
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>新建提醒事项</Text>
-          <TouchableOpacity onPress={handleSave} disabled={!title.trim()}>
-            <Text style={[styles.saveText, !title.trim() && styles.saveTextDisabled]}>添加</Text>
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>标题（必填）</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="如：给客户发邮件、吃药、开会"
-              value={title}
-              onChangeText={setTitle}
-              autoFocus
-            />
-
-            <Text style={styles.sectionLabel}>备注内容（可选）</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="详情说明或由 Agent 传入的元数据"
-              value={notes}
-              onChangeText={setNotes}
-              multiline
-              numberOfLines={3}
-            />
+    <Modal
+      visible={visible}
+      animationType="slide"
+      presentationStyle="fullScreen"
+      onRequestClose={onClose}
+    >
+      <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 12 : 0}
+          style={styles.keyboardView}
+        >
+          <View style={styles.header}>
+            <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={styles.cancelText}>取消</Text>
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{isEditing ? '编辑提醒事项' : '新建提醒事项'}</Text>
+            <TouchableOpacity
+              onPress={handleSave}
+              disabled={!title.trim()}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            >
+              <Text style={[styles.saveText, !title.trim() && styles.saveTextDisabled]}>
+                {isEditing ? '保存' : '添加'}
+              </Text>
+            </TouchableOpacity>
           </View>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>触发日期 (YYYY-MM-DD)</Text>
-            <TextInput style={styles.input} value={date} onChangeText={setDate} />
+          <ScrollView style={styles.body} keyboardShouldPersistTaps="handled">
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>标题（必填）</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="如：给客户发邮件、吃药、开会"
+                value={title}
+                onChangeText={setTitle}
+              />
 
-            <Text style={styles.sectionLabel}>触发时间 (默认 08:00)</Text>
-            <TextInput style={styles.input} value={time} onChangeText={setTime} placeholder="08:00" />
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>重复规则（默认每小时）</Text>
-            <View style={styles.repeatList}>
-              {repeatOptions.map((opt) => (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.repeatOption, repeat === opt.key && styles.repeatOptionActive]}
-                  onPress={() => setRepeat(opt.key)}
-                >
-                  <Text style={[styles.repeatText, repeat === opt.key && styles.repeatTextActive]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+              <Text style={styles.sectionLabel}>备注内容（可选）</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="详情说明或由 Agent 传入的元数据"
+                value={notes}
+                onChangeText={setNotes}
+                multiline
+                numberOfLines={3}
+              />
             </View>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>触发日期 (YYYY-MM-DD)</Text>
+              <TextInput style={styles.input} value={date} onChangeText={setDate} />
+
+              <Text style={styles.sectionLabel}>触发时间 (默认 08:00)</Text>
+              <TextInput style={styles.input} value={time} onChangeText={setTime} placeholder="08:00" />
+            </View>
+
+            <View style={styles.section}>
+              <Text style={styles.sectionLabel}>重复规则（默认每小时）</Text>
+              <View style={styles.repeatList}>
+                {repeatOptions.map((opt) => (
+                  <TouchableOpacity
+                    key={opt.key}
+                    style={[styles.repeatOption, repeat === opt.key && styles.repeatOptionActive]}
+                    onPress={() => setRepeat(opt.key)}
+                  >
+                    <Text style={[styles.repeatText, repeat === opt.key && styles.repeatTextActive]}>
+                      {opt.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 };
@@ -128,6 +171,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F2F2F7',
+  },
+  keyboardView: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

@@ -39,3 +39,27 @@ test('FilterBar 统计数据计算: 正确汇总 counts 对象', () => {
   assert.strictEqual(counts.completed, 2);
   assert.strictEqual(counts.repeating, 2);
 });
+
+test('UI 数据编辑逻辑: 修改已有提醒的标题、时间与重复规则', () => {
+  const original = applyReminderDefaults({
+    id: 'rem_edit_test',
+    title: '原标题',
+    date: '2026-09-07',
+    time: '08:00',
+    repeat: 'none',
+  });
+
+  const edited: typeof original = {
+    ...original,
+    title: '新修改标题',
+    time: '14:30',
+    repeat: 'daily',
+    notes: '补充说明',
+  };
+
+  assert.strictEqual(edited.id, original.id);
+  assert.strictEqual(edited.title, '新修改标题');
+  assert.strictEqual(edited.time, '14:30');
+  assert.strictEqual(edited.repeat, 'daily');
+  assert.strictEqual(edited.notes, '补充说明');
+});

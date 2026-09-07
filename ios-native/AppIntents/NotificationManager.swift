@@ -21,36 +21,100 @@ public class NativeNotificationManager {
             return
         }
         
-        var dateComponents = DateComponents()
-        dateComponents.hour = hour
-        dateComponents.minute = minute
+        var targetComponents = DateComponents()
+        targetComponents.year = year
+        targetComponents.month = month
+        targetComponents.day = day
+        targetComponents.hour = hour
+        targetComponents.minute = minute
+        targetComponents.second = 0
         
+        guard let originalDate = Calendar.current.date(from: targetComponents) else { return }
+        
+        let now = Date()
+        var nextDate = originalDate
+        
+        if nextDate <= now {
+            switch item.repeatRule {
+            case "none":
+                return // 已过期的一次性提醒不调度，避免刚创建即触发
+            case "half_hourly":
+                while nextDate <= now {
+                    nextDate = nextDate.addingTimeInterval(1800)
+                }
+            case "hourly":
+                while nextDate <= now {
+                    if let d = Calendar.current.date(byAdding: .hour, value: 1, to: nextDate) {
+                        nextDate = d
+                    } else { break }
+                }
+            case "daily":
+                while nextDate <= now {
+                    if let d = Calendar.current.date(byAdding: .day, value: 1, to: nextDate) {
+                        nextDate = d
+                    } else { break }
+                }
+            case "weekly":
+                while nextDate <= now {
+                    if let d = Calendar.current.date(byAdding: .day, value: 7, to: nextDate) {
+                        nextDate = d
+                    } else { break }
+                }
+            default:
+                return
+            }
+        }
+        
+        let timeIntervalToNext = nextDate.timeIntervalSince(now)
         var trigger: UNNotificationTrigger
         
         switch item.repeatRule {
+        case "none":
+            let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
         case "half_hourly":
-            trigger = UNTimeIntervalNotificationTrigger(timeInterval: 1800, repeats: true)
-        case "hourly":
-            dateComponents.hour = nil // 匹配每小时的该分钟
-            trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        case "daily":
-            trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
-        case "weekly":
-            var targetComponents = DateComponents()
-            targetComponents.year = year
-            targetComponents.month = month
-            targetComponents.day = day
-            if let targetDate = Calendar.current.date(from: targetComponents) {
-                dateComponents.weekday = Calendar.current.component(.weekday, from: targetDate)
+            if timeIntervalToNext <= 1800 {
+                trigger = UNTimeIntervalNotificationTrigger(timeInterval: max(1, timeIntervalToNext), repeats: false)
+            } else {
+                let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
             }
-            trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: true)
+        case "hourly":
+            if timeIntervalToNext <= 3600 {
+                var dc = DateComponents()
+                dc.minute = Calendar.current.component(.minute, from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
+            } else {
+                let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+            }
+        case "daily":
+            if timeIntervalToNext <= 86400 {
+                var dc = DateComponents()
+                dc.hour = Calendar.current.component(.hour, from: nextDate)
+                dc.minute = Calendar.current.component(.minute, from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
+            } else {
+                let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+            }
+        case "weekly":
+            if timeIntervalToNext <= 7 * 86400 {
+                var dc = DateComponents()
+                dc.weekday = Calendar.current.component(.weekday, from: nextDate)
+                dc.hour = Calendar.current.component(.hour, from: nextDate)
+                dc.minute = Calendar.current.component(.minute, from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: true)
+            } else {
+                let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+                trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
+            }
         default:
-            dateComponents.year = year
-            dateComponents.month = month
-            dateComponents.day = day
-            trigger = UNCalendarNotificationTrigger(dateMatching: dateComponents, repeats: false)
+            let dc = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute], from: nextDate)
+            trigger = UNCalendarNotificationTrigger(dateMatching: dc, repeats: false)
         }
         
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [item.id])
         let request = UNNotificationRequest(identifier: item.id, content: content, trigger: trigger)
         UNUserNotificationCenter.current().add(request)
     }

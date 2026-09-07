@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, TextInput, Alert, ScrollView } from 'react-native';
 import * as Linking from 'expo-linking';
+import * as Clipboard from 'expo-clipboard';
 import { handleIncomingUrl } from '../services/urlScheme';
 
 function getLocalTodayString(): string {
@@ -21,31 +22,15 @@ export const AutomationTester: React.FC = () => {
 
   const triggerTestUrl = async () => {
     try {
-      // 1. 尝试系统级原生 URL Scheme 唤起（适用于已打包独立客户端）
-      const canOpen = await Linking.canOpenURL(generatedUrl).catch(() => false);
-      if (canOpen) {
-        await Linking.openURL(generatedUrl);
-        return;
-      }
-      // 2. 在 Expo Go 预览或未注册系统协议的环境下，由内置调度引擎直接执行
+      // 在应用内直接调用内置协议引擎执行，同时触发 Storage 广播与列表自动刷新
       const res = await handleIncomingUrl(generatedUrl);
       if (res.success) {
-        Alert.alert('✅ 唤起执行成功 (Expo 预览模式)', res.message);
+        Alert.alert('✅ URL Scheme 执行成功', `已根据协议指令自动创建提醒并完成调度！\n${res.message}`);
       } else {
-        Alert.alert('处理失败', res.message);
+        Alert.alert('执行未完成', res.message || '未能解析该指令');
       }
     } catch (e: any) {
-      // 3. 若 Linking.openURL 抛出异常（如 iOS 报无法打开此 URL），平滑回退至内置调度器
-      try {
-        const res = await handleIncomingUrl(generatedUrl);
-        if (res.success) {
-          Alert.alert('✅ 唤起执行成功 (Expo 预览模式)', res.message);
-        } else {
-          Alert.alert('处理失败', res.message);
-        }
-      } catch (innerErr: any) {
-        Alert.alert('打开失败', innerErr?.message || e?.message || '无法唤起 URL Scheme');
-      }
+      Alert.alert('执行异常', e?.message || '无法执行该协议指令');
     }
   };
 
@@ -56,11 +41,16 @@ agentreminder://create?title={标题}&date={YYYY-MM-DD}&time={HH:mm}&repeat={non
 1. 若未指定时间，系统将默认使用 08:00。
 2. 若未指定重复规则，系统将默认使用 hourly（每小时重复）。`;
 
-  const copyPrompt = () => {
-    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(agentPrompt).catch(() => {});
+  const copyPrompt = async () => {
+    try {
+      await Clipboard.setStringAsync(agentPrompt);
+      Alert.alert('已复制提示词', 'AI Agent 接入提示词已成功复制到系统剪贴板，可直接粘贴使用。');
+    } catch (err) {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard.writeText(agentPrompt).catch(() => {});
+      }
+      Alert.alert('已复制提示词', 'AI Agent 接入提示词已准备就绪，可直接粘贴使用。');
     }
-    Alert.alert('已复制提示词', 'AI Agent 接入提示词已准备就绪，可直接粘贴使用。');
   };
 
   return (

@@ -7,9 +7,10 @@ export interface ReminderCardProps {
   item: ReminderItem;
   onToggle: (id: string) => void;
   onDelete: (id: string) => void;
+  onPress?: (item: ReminderItem) => void;
 }
 
-export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDelete }) => {
+export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDelete, onPress }) => {
   const isRepeating = item.repeat !== 'none';
 
   return (
@@ -23,7 +24,11 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDe
         {item.isCompleted && <Text style={styles.checkmark}>✓</Text>}
       </TouchableOpacity>
 
-      <View style={styles.content}>
+      <TouchableOpacity
+        style={styles.content}
+        activeOpacity={onPress ? 0.7 : 1}
+        onPress={() => onPress?.(item)}
+      >
         <Text style={[styles.title, item.isCompleted && styles.titleCompleted]}>
           {item.title}
         </Text>
@@ -48,7 +53,7 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({ item, onToggle, onDe
             </View>
           ) : null}
         </View>
-      </View>
+      </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.deleteButton}

@@ -2,11 +2,47 @@ import { test } from 'node:test';
 import assert from 'node:assert';
 import {
   calculateTriggerDate,
+  calculateNextTriggerDate,
   getRepeatIntervalDescription,
   buildNotificationSchedule,
   NotificationEngine,
 } from '../src/services/notifications.ts';
 import { applyReminderDefaults } from '../src/services/defaults.ts';
+
+test('calculateNextTriggerDate: 核心调度规则验证', () => {
+  const fakeNow = new Date(2026, 8, 7, 10, 30, 0, 0); // 2026-09-07 10:30:00
+
+  // 1. 目标时间在未来（如今天 14:00）：首个触发时间必须为未来目标时间，绝不提前
+  const futureTarget = new Date(2026, 8, 7, 14, 0, 0, 0);
+  const nextHourly = calculateNextTriggerDate(futureTarget, 'hourly', fakeNow);
+  assert.strictEqual(nextHourly?.getTime(), futureTarget.getTime());
+
+  // 2. 目标时间已过期且不重复（none）：返回 null，避免创建后立即触发
+  const pastTarget = new Date(2026, 8, 7, 8, 0, 0, 0); // 08:00 已过去
+  const nextNone = calculateNextTriggerDate(pastTarget, 'none', fakeNow);
+  assert.strictEqual(nextNone, null);
+
+  // 3. 目标时间已过期但为 hourly：推算至未来下一个小时的对应分钟（11:00）
+  const nextHourlyFromPast = calculateNextTriggerDate(pastTarget, 'hourly', fakeNow);
+  assert.strictEqual(nextHourlyFromPast?.getHours(), 11);
+  assert.strictEqual(nextHourlyFromPast?.getMinutes(), 0);
+
+  // 4. 目标时间已过期但为 half_hourly：推算至未来的下一个 30 分钟节点（11:00）
+  const nextHalfFromPast = calculateNextTriggerDate(pastTarget, 'half_hourly', fakeNow);
+  assert.strictEqual(nextHalfFromPast?.getHours(), 11);
+  assert.strictEqual(nextHalfFromPast?.getMinutes(), 0);
+
+  // 5. 目标时间已过期但为 daily：推算至明天的 08:00
+  const nextDailyFromPast = calculateNextTriggerDate(pastTarget, 'daily', fakeNow);
+  assert.strictEqual(nextDailyFromPast?.getDate(), 8);
+  assert.strictEqual(nextDailyFromPast?.getHours(), 8);
+  assert.strictEqual(nextDailyFromPast?.getMinutes(), 0);
+
+  // 6. 目标时间已过期但为 weekly：推算至下周同一天的 08:00
+  const nextWeeklyFromPast = calculateNextTriggerDate(pastTarget, 'weekly', fakeNow);
+  assert.strictEqual(nextWeeklyFromPast?.getDate(), 14);
+  assert.strictEqual(nextWeeklyFromPast?.getHours(), 8);
+});
 
 test('calculateTriggerDate: 正确解析年月日与时分', () => {
   const d = calculateTriggerDate('2026-09-05', '08:00');

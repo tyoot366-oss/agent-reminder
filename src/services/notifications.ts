@@ -27,6 +27,52 @@ export function calculateTriggerDate(dateStr: string, timeStr: string): Date {
   return new Date(year, month - 1, day, hour, minute, 0, 0);
 }
 
+/**
+ * 计算未来的下一个有效触发时间：
+ * 1. 如果 targetDate 还在未来（> now），首次触发时间严格等于 targetDate（绝不提前触发）
+ * 2. 如果 targetDate 已是过去时间（<= now）：
+ *    - repeat === 'none'：已过期，返回 null（避免创建后立即误触发）
+ *    - repeat !== 'none'：步进推算到未来的第一个有效触发点
+ */
+export function calculateNextTriggerDate(
+  targetDate: Date,
+  repeat: RepeatRule,
+  now: Date = new Date()
+): Date | null {
+  if (targetDate.getTime() > now.getTime()) {
+    return new Date(targetDate.getTime());
+  }
+
+  if (repeat === 'none') {
+    return null;
+  }
+
+  const next = new Date(targetDate.getTime());
+
+  switch (repeat) {
+    case 'half_hourly':
+      while (next.getTime() <= now.getTime()) {
+        next.setMinutes(next.getMinutes() + 30);
+      }
+      return next;
+    case 'hourly':
+      while (next.getTime() <= now.getTime()) {
+        next.setHours(next.getHours() + 1);
+      }
+      return next;
+    case 'daily':
+      while (next.getTime() <= now.getTime()) {
+        next.setDate(next.getDate() + 1);
+      }
+      return next;
+    case 'weekly':
+      while (next.getTime() <= now.getTime()) {
+        next.setDate(next.getDate() + 7);
+      }
+      return next;
+  }
+}
+
 export function getRepeatIntervalDescription(repeat: RepeatRule): string {
   switch (repeat) {
     case 'none':
@@ -42,21 +88,25 @@ export function getRepeatIntervalDescription(repeat: RepeatRule): string {
   }
 }
 
-export function buildNotificationSchedule(reminder: ReminderItem): NotificationScheduleInfo {
+export function buildNotificationSchedule(
+  reminder: ReminderItem,
+  now: Date = new Date()
+): NotificationScheduleInfo {
   const targetDate = calculateTriggerDate(reminder.date, reminder.time);
+  const nextTrigger = calculateNextTriggerDate(targetDate, reminder.repeat, now) || targetDate;
 
   switch (reminder.repeat) {
     case 'none':
       return {
         triggerType: 'calendar',
         repeats: false,
-        targetDate,
+        targetDate: nextTrigger,
       };
     case 'half_hourly':
       return {
         triggerType: 'interval',
         repeats: true,
-        targetDate,
+        targetDate: nextTrigger,
         intervalSeconds: 1800,
       };
     case 'hourly':
@@ -65,7 +115,7 @@ export function buildNotificationSchedule(reminder: ReminderItem): NotificationS
       return {
         triggerType: 'calendar',
         repeats: true,
-        targetDate,
+        targetDate: nextTrigger,
       };
   }
 }
@@ -114,32 +164,77 @@ export class NotificationEngine {
 
     try {
       const targetDate = calculateTriggerDate(reminder.date, reminder.time);
-      let trigger: any; // Use any to avoid complex TS types conditionally
+      const nextTrigger = calculateNextTriggerDate(targetDate, reminder.repeat);
+
+      // 已过期的一次性提醒不调度，避免刚创建就触发
+      if (!nextTrigger) {
+        return notificationId;
+      }
+
+      await Notifications.cancelScheduledNotificationAsync(notificationId).catch(() => {});
+
+      let trigger: any;
+      const msUntilNext = nextTrigger.getTime() - Date.now();
 
       switch (reminder.repeat) {
         case 'none':
-          trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: targetDate };
+          trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
           break;
         case 'half_hourly':
-          trigger = { type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL, seconds: 1800, repeats: true };
+          // 如果首个触发时间在 30 分钟以内，使用一次性倒计时到首个触发点，到点触发
+          const secondsUntilFirst = Math.max(1, Math.round(msUntilNext / 1000));
+          if (secondsUntilFirst <= 1800) {
+            trigger = {
+              type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+              seconds: secondsUntilFirst,
+              repeats: false,
+            };
+          } else {
+            trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
+          }
           break;
         case 'hourly':
-          trigger = { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, minute: targetDate.getMinutes(), repeats: true };
+          // 只有在首个触发时间在 1 小时内时，才使用 CALENDAR minute 重复触发
+          // 若触发时间在未来数小时或明天，必须用精确 DATE，避免提前触发
+          if (msUntilNext <= 3600 * 1000) {
+            trigger = {
+              type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+              minute: nextTrigger.getMinutes(),
+              repeats: true,
+            };
+          } else {
+            trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
+          }
           break;
         case 'daily':
-          trigger = { type: Notifications.SchedulableTriggerInputTypes.CALENDAR, hour: targetDate.getHours(), minute: targetDate.getMinutes(), repeats: true };
+          // 首个触发时间在 24 小时内时，使用 CALENDAR hour+minute
+          if (msUntilNext <= 24 * 3600 * 1000) {
+            trigger = {
+              type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+              hour: nextTrigger.getHours(),
+              minute: nextTrigger.getMinutes(),
+              repeats: true,
+            };
+          } else {
+            trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
+          }
           break;
         case 'weekly':
-          trigger = { 
-            type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
-            weekday: targetDate.getDay() + 1,
-            hour: targetDate.getHours(), 
-            minute: targetDate.getMinutes(), 
-            repeats: true 
-          };
+          // 首个触发时间在 7 天内时，使用 CALENDAR weekday+hour+minute
+          if (msUntilNext <= 7 * 24 * 3600 * 1000) {
+            trigger = {
+              type: Notifications.SchedulableTriggerInputTypes.CALENDAR,
+              weekday: nextTrigger.getDay() + 1,
+              hour: nextTrigger.getHours(),
+              minute: nextTrigger.getMinutes(),
+              repeats: true,
+            };
+          } else {
+            trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
+          }
           break;
         default:
-          trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: targetDate };
+          trigger = { type: Notifications.SchedulableTriggerInputTypes.DATE, date: nextTrigger };
       }
 
       await Notifications.scheduleNotificationAsync({

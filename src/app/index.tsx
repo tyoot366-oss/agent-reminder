@@ -44,6 +44,7 @@ export default function RemindersScreen() {
   const [currentFilter, setCurrentFilter] = useState<FilterType>('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
+  const [editingItem, setEditingItem] = useState<ReminderItem | null>(null);
 
   // 1. 从 Storage 全量加载提醒数据
   const loadReminders = useCallback(async () => {
@@ -122,28 +123,49 @@ export default function RemindersScreen() {
     [loadReminders]
   );
 
-  // 6. 新增提醒
-  const handleAdd = useCallback(
+  // 6. 保存提醒（支持新建与修改双模式）
+  const handleSave = useCallback(
     async (input: CreateReminderInput) => {
       try {
-        // 兜底：启动时已请求过一次；若用户曾拒绝，这里返回 false 并引导前往系统设置开启
         const granted = await defaultNotificationEngine.requestPermissions();
-        const item = applyReminderDefaults(input);
-        await defaultStorage.save(item);
-        await defaultNotificationEngine.schedule(item);
-        await loadReminders();
-        if (!granted) {
-          Alert.alert(
-            '通知权限未开启',
-            '提醒已保存，但到点不会弹出通知。请前往「设置 → 通知 → AgentReminder」允许通知。',
-          );
+        if (editingItem) {
+          // 编辑已有提醒
+          const updated: ReminderItem = {
+            ...editingItem,
+            title: input.title,
+            notes: input.notes,
+            date: input.date,
+            time: input.time || editingItem.time,
+            repeat: input.repeat || editingItem.repeat,
+          };
+          await defaultStorage.save(updated);
+          await defaultNotificationEngine.cancel(updated.id);
+          if (!updated.isCompleted) {
+            await defaultNotificationEngine.schedule(updated);
+          }
+          await loadReminders();
+          setEditingItem(null);
+          setIsAddModalVisible(false);
+        } else {
+          // 新增提醒
+          const item = applyReminderDefaults(input);
+          await defaultStorage.save(item);
+          await defaultNotificationEngine.schedule(item);
+          await loadReminders();
+          setIsAddModalVisible(false);
+          if (!granted) {
+            Alert.alert(
+              '通知权限未开启',
+              '提醒已保存，但到点不会弹出通知。请前往「设置 → 通知 → AgentReminder」允许通知。',
+            );
+          }
         }
       } catch (err: any) {
-        console.error('Failed to add reminder:', err);
-        Alert.alert('操作失败', err?.message || '创建提醒失败，请重试');
+        console.error('Failed to save reminder:', err);
+        Alert.alert('操作失败', err?.message || '保存提醒失败，请重试');
       }
     },
-    [loadReminders]
+    [editingItem, loadReminders]
   );
 
   // 7. 计算分类统计数据与过滤列表
@@ -201,7 +223,15 @@ export default function RemindersScreen() {
         data={filteredReminders}
         keyExtractor={(item) => item.id}
         renderItem={({ item }) => (
-          <ReminderCard item={item} onToggle={handleToggle} onDelete={handleDelete} />
+          <ReminderCard
+            item={item}
+            onToggle={handleToggle}
+            onDelete={handleDelete}
+            onPress={(selectedItem) => {
+              setEditingItem(selectedItem);
+              setIsAddModalVisible(true);
+            }}
+          />
         )}
         ListEmptyComponent={renderEmptyComponent}
         contentContainerStyle={[
@@ -224,18 +254,25 @@ export default function RemindersScreen() {
           styles.fab,
           { bottom: Math.max(insets.bottom, 16) + 64 },
         ]}
-        onPress={() => setIsAddModalVisible(true)}
+        onPress={() => {
+          setEditingItem(null);
+          setIsAddModalVisible(true);
+        }}
         activeOpacity={0.8}
         accessibilityLabel="新建提醒"
       >
         <Text style={styles.fabText}>+</Text>
       </TouchableOpacity>
 
-      {/* 新建提醒弹窗 */}
+      {/* 新建/编辑提醒弹窗 */}
       <AddReminderModal
         visible={isAddModalVisible}
-        onClose={() => setIsAddModalVisible(false)}
-        onAdd={handleAdd}
+        initialData={editingItem}
+        onClose={() => {
+          setIsAddModalVisible(false);
+          setEditingItem(null);
+        }}
+        onSave={handleSave}
       />
     </SafeAreaView>
   );
